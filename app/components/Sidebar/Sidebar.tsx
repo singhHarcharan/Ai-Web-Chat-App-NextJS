@@ -5,7 +5,15 @@ import { WorkspaceSelector } from "@/app/components/WorkspaceSelector/WorkspaceS
 import { ChatList } from "@/app/components/ChatList/ChatList";
 
 export const Sidebar = () => {
-  const { state, selectWorkspace, selectChat, createChat, toggleSidebar } = useChat();
+  const {
+    state,
+    selectWorkspace,
+    selectChat,
+    createChat,
+    createWorkspace,
+    deleteWorkspace,
+    toggleSidebar
+  } = useChat();
   const activeWorkspace = state.workspaces.find(
     (workspace) => workspace.id === state.activeWorkspaceId
   );
@@ -42,6 +50,14 @@ export const Sidebar = () => {
             workspaces={state.workspaces}
             activeWorkspaceId={state.activeWorkspaceId}
             onSelect={selectWorkspace}
+            onCreate={() => {
+              const name = window.prompt("Workspace name?");
+              createWorkspace(name ?? undefined);
+            }}
+            onDelete={(workspaceId) => {
+              const confirmed = window.confirm("Delete this workspace? This cannot be undone.");
+              if (confirmed) deleteWorkspace(workspaceId);
+            }}
           />
         </div>
       )}

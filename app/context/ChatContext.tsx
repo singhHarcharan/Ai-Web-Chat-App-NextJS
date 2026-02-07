@@ -26,6 +26,8 @@ export type ChatContextValue = {
   selectWorkspace: (workspaceId: string) => void;
   selectChat: (chatId: string) => void;
   createChat: () => void;
+  createWorkspace: (name?: string) => void;
+  deleteWorkspace: (workspaceId: string) => void;
   toggleSidebar: () => void;
   sendMessage: (content: string) => void;
 };
@@ -184,6 +186,49 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     });
   };
 
+  const createWorkspace = (name?: string) => {
+    setState((prev) => {
+      const workspaceId = createId();
+      const chatId = createId();
+      const workspaceName = name?.trim() || `Workspace ${prev.workspaces.length + 1}`;
+      const newWorkspace: Workspace = {
+        id: workspaceId,
+        name: workspaceName,
+        chats: [
+          {
+            id: chatId,
+            title: "New Chat",
+            messages: []
+          }
+        ]
+      };
+      return {
+        ...prev,
+        workspaces: [newWorkspace, ...prev.workspaces],
+        activeWorkspaceId: workspaceId,
+        activeChatId: chatId
+      };
+    });
+  };
+
+  const deleteWorkspace = (workspaceId: string) => {
+    setState((prev) => {
+      const remaining = prev.workspaces.filter((workspace) => workspace.id !== workspaceId);
+      if (remaining.length === 0) {
+        const fallback = createSeedState();
+        return { ...fallback, sidebarCollapsed: prev.sidebarCollapsed };
+      }
+      const nextActiveWorkspace =
+        prev.activeWorkspaceId === workspaceId ? remaining[0] : remaining.find((w) => w.id === prev.activeWorkspaceId);
+      return {
+        ...prev,
+        workspaces: remaining,
+        activeWorkspaceId: nextActiveWorkspace?.id ?? remaining[0].id,
+        activeChatId: nextActiveWorkspace?.chats[0]?.id ?? remaining[0].chats[0]?.id ?? ""
+      };
+    });
+  };
+
   const toggleSidebar = () => {
     setState((prev) => ({ ...prev, sidebarCollapsed: !prev.sidebarCollapsed }));
   };
@@ -263,6 +308,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     selectWorkspace,
     selectChat,
     createChat,
+    createWorkspace,
+    deleteWorkspace,
     toggleSidebar,
     sendMessage
   };
