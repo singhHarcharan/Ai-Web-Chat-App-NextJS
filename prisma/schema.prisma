@@ -1,5 +1,4 @@
 // prisma/schema.prisma
-// prisma/schema.prisma
 generator client {
   provider = "prisma-client-js"
 }
@@ -45,6 +44,8 @@ model User {
   password      String?   // Only for email/password auth
   accounts      Account[]
   sessions      Session[]
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 }
 
 model VerificationToken {

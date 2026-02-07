@@ -1,12 +1,19 @@
+// app/api/auth/register/route.ts
 import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
 import { hash } from "bcryptjs";
-import prisma from "@/lib/prisma";
 
 export async function POST(req: Request) {
   try {
     const { name, email, password } = await req.json();
 
-    // Check if user already exists
+    if (!name || !email || !password) {
+      return NextResponse.json(
+        { error: "Please fill in all fields" },
+        { status: 400 }
+      );
+    }
+
     const existingUser = await prisma.user.findUnique({
       where: { email: email.toLowerCase() },
     });
@@ -18,10 +25,8 @@ export async function POST(req: Request) {
       );
     }
 
-    // Hash password
     const hashedPassword = await hash(password, 12);
 
-    // Create user
     const user = await prisma.user.create({
       data: {
         name,
@@ -34,10 +39,10 @@ export async function POST(req: Request) {
       { message: "User created successfully" },
       { status: 201 }
     );
-  } catch (error: any) {
+  } catch (error) {
     console.error("Registration error:", error);
     return NextResponse.json(
-      { error: "Internal server error" },
+      { error: "Something went wrong" },
       { status: 500 }
     );
   }

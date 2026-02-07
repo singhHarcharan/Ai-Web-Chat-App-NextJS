@@ -1,15 +1,16 @@
+// app/(auth)/register/page.tsx
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
 import { signIn } from "next-auth/react";
+import { useState } from "react";
 import Link from "next/link";
+import { GoogleSignInButton } from "../components/GoogleSignInButton";
 
 export default function RegisterPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -17,15 +18,10 @@ export default function RegisterPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-
-    if (password !== confirmPassword) {
-      setError("Passwords do not match");
-      return;
-    }
+    setLoading(true);
 
     try {
-      setLoading(true);
-      const res = await fetch("/api/auth/register", {
+      const response = await fetch("/api/auth/register", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -33,9 +29,10 @@ export default function RegisterPage() {
         body: JSON.stringify({ name, email, password }),
       });
 
-      if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.message || "Registration failed");
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Registration failed");
       }
 
       // Sign in the user after registration
@@ -51,8 +48,8 @@ export default function RegisterPage() {
       }
 
       router.push("/dashboard");
-    } catch (err: any) {
-      setError(err.message || "Registration failed. Please try again.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Registration failed");
     } finally {
       setLoading(false);
     }
@@ -75,6 +72,7 @@ export default function RegisterPage() {
             </Link>
           </p>
         </div>
+
         {error && (
           <div className="bg-red-50 border-l-4 border-red-500 p-4">
             <div className="flex">
@@ -98,6 +96,7 @@ export default function RegisterPage() {
             </div>
           </div>
         )}
+
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           <div className="rounded-md shadow-sm -space-y-px">
             <div>
@@ -117,11 +116,11 @@ export default function RegisterPage() {
               />
             </div>
             <div>
-              <label htmlFor="email-address" className="sr-only">
+              <label htmlFor="email" className="sr-only">
                 Email address
               </label>
               <input
-                id="email-address"
+                id="email"
                 name="email"
                 type="email"
                 autoComplete="email"
@@ -144,24 +143,9 @@ export default function RegisterPage() {
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                placeholder="Password"
-              />
-            </div>
-            <div>
-              <label htmlFor="confirm-password" className="sr-only">
-                Confirm Password
-              </label>
-              <input
-                id="confirm-password"
-                name="confirm-password"
-                type="password"
-                autoComplete="new-password"
-                required
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
                 className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
-                placeholder="Confirm Password"
+                placeholder="Password"
+                minLength={6}
               />
             </div>
           </div>
@@ -178,6 +162,31 @@ export default function RegisterPage() {
             </button>
           </div>
         </form>
+
+        <div className="mt-6">
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-300" />
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-2 bg-white text-gray-500">Or continue with</span>
+            </div>
+          </div>
+
+          <div className="mt-6">
+            <GoogleSignInButton />
+          </div>
+        </div>
+
+        <div className="text-center text-sm text-gray-600">
+          Already have an account?{" "}
+          <Link
+            href="/login"
+            className="font-medium text-blue-600 hover:text-blue-500"
+          >
+            Sign in
+          </Link>
+        </div>
       </div>
     </div>
   );
