@@ -463,8 +463,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     });
   };
 
-  // Frontend-only streaming simulation so the UI behaves like a real agent stream.
-  const sendMessage = (content: string) => {
+  // Streaming send flow. Uses backend SSE when available, otherwise simulates locally.
+  const sendMessage = async (content: string) => {
     if (!activeChat || isStreaming) return;
     const trimmed = content.trim();
     if (!trimmed) return;
@@ -485,6 +485,77 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     };
 
     updateChatMessages(activeChat.id, (messages) => [...messages, userMessage, assistantMessage]);
+
+    if (isApiBacked) {
+      try {
+        const response = await fetch(`/api/chats/${activeChat.id}/stream`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ content: trimmed })
+        });
+
+        if (!response.ok || !response.body) {
+          throw new Error("Streaming failed");
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = "";
+
+        while (true) {
+          const { value, done } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+
+          const parts = buffer.split("\n\n");
+          buffer = parts.pop() ?? "";
+
+          for (const part of parts) {
+            const line = part.trim();
+            if (!line.startsWith("data:")) continue;
+            const payload = line.replace("data:", "").trim();
+            if (payload === "[DONE]") {
+              updateChatMessages(activeChat.id, (messages) =>
+                messages.map((message) =>
+                  message.id === assistantMessage.id ? { ...message, isStreaming: false } : message
+                )
+              );
+              return;
+            }
+
+            try {
+              const data = JSON.parse(payload) as { token?: string };
+              if (data.token) {
+                updateChatMessages(activeChat.id, (messages) =>
+                  messages.map((message) => {
+                    if (message.id !== assistantMessage.id) return message;
+                    return { ...message, content: message.content + data.token };
+                  })
+                );
+              }
+            } catch {
+              // Ignore malformed stream chunks
+            }
+          }
+        }
+
+        updateChatMessages(activeChat.id, (messages) =>
+          messages.map((message) =>
+            message.id === assistantMessage.id ? { ...message, isStreaming: false } : message
+          )
+        );
+      } catch (error) {
+        console.error("Streaming error:", error);
+        updateChatMessages(activeChat.id, (messages) =>
+          messages.map((message) =>
+            message.id === assistantMessage.id
+              ? { ...message, content: "There was an error streaming the response.", isStreaming: false }
+              : message
+          )
+        );
+      }
+      return;
+    }
 
     const simulatedResponse =
       "Thanks for the context. This is a simulated streaming response to demonstrate how the UI will render token-by-token once OpenRouter and your agent backend are connected.";
