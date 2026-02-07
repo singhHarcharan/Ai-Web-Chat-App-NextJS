@@ -7,10 +7,11 @@ type ChatListProps = {
   chats: Chat[];
   activeChatId: string;
   onSelect: (chatId: string) => void;
-  onCreate: () => void;
+  onCreate: () => void | Promise<void>;
   onRename: (chatId: string, newTitle: string) => void;
   onDelete: (chatId: string) => void;
   collapsed?: boolean;
+  isMutating?: boolean;
 };
 
 export const ChatList = ({
@@ -20,7 +21,8 @@ export const ChatList = ({
   onCreate,
   onRename,
   onDelete,
-  collapsed = false
+  collapsed = false,
+  isMutating = false
 }: ChatListProps) => {
   return (
     <div className="flex h-full flex-col">
@@ -30,9 +32,10 @@ export const ChatList = ({
           <button
             type="button"
             onClick={onCreate}
-            className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100 dark:border-slate-800 dark:text-slate-200 dark:hover:bg-slate-900"
+            className="rounded-lg border border-slate-200 px-2 py-1 text-xs font-medium text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-800 dark:text-slate-200 dark:hover:bg-slate-900"
+            disabled={isMutating}
           >
-            New Chat
+            {isMutating ? "Working..." : "New Chat"}
           </button>
         </div>
       )}
@@ -46,6 +49,7 @@ export const ChatList = ({
                 chat={chat}
                 isActive={chat.id === activeChatId}
                 collapsed={collapsed}
+                isMutating={isMutating}
                 onSelect={onSelect}
                 onRename={onRename}
                 onDelete={onDelete}
@@ -75,7 +79,8 @@ export const ChatList = ({
               <button
                 type="button"
                 onClick={onCreate}
-                className="inline-flex items-center rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+                className="inline-flex items-center rounded-md bg-blue-600 px-3 py-2 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
+                disabled={isMutating}
               >
                 <svg
                   className="-ml-0.5 mr-1.5 h-5 w-5"
@@ -97,8 +102,9 @@ export const ChatList = ({
           <button
             type="button"
             onClick={onCreate}
-            className="flex w-full items-center justify-center rounded-lg p-2 text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
+            className="flex w-full items-center justify-center rounded-lg p-2 text-slate-600 hover:bg-slate-100 disabled:cursor-not-allowed disabled:opacity-60 dark:text-slate-300 dark:hover:bg-slate-800"
             aria-label="New chat"
+            disabled={isMutating}
           >
             <svg
               className="h-5 w-5"

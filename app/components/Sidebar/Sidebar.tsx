@@ -14,7 +14,8 @@ export const Sidebar = () => {
     deleteChat,
     createWorkspace,
     deleteWorkspace,
-    toggleSidebar
+    toggleSidebar,
+    isMutating
   } = useChat();
   const activeWorkspace = state.workspaces.find(
     (workspace) => workspace.id === state.activeWorkspaceId
@@ -52,14 +53,12 @@ export const Sidebar = () => {
             workspaces={state.workspaces}
             activeWorkspaceId={state.activeWorkspaceId}
             onSelect={selectWorkspace}
-            onCreate={() => {
-              const name = window.prompt("Workspace name?");
-              createWorkspace(name ?? undefined);
-            }}
+            onCreate={createWorkspace}
             onDelete={(workspaceId) => {
               const confirmed = window.confirm("Delete this workspace? This cannot be undone.");
               if (confirmed) deleteWorkspace(workspaceId);
             }}
+            isMutating={isMutating}
           />
         </div>
       )}
@@ -73,6 +72,7 @@ export const Sidebar = () => {
           onRename={renameChat}
           onDelete={deleteChat}
           collapsed={state.sidebarCollapsed}
+          isMutating={isMutating}
         />
       </div>
     </aside>

@@ -23,6 +23,7 @@ export type ChatContextValue = {
   activeWorkspace: Workspace | undefined;
   activeChat: Chat | undefined;
   isStreaming: boolean;
+  isMutating: boolean;
   selectWorkspace: (workspaceId: string) => void;
   selectChat: (chatId: string) => void;
   createChat: () => void;
@@ -117,8 +118,42 @@ const saveState = (state: ChatState) => {
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
 };
 
+type ApiWorkspace = {
+  id: string;
+  name: string;
+  projects?: Array<{
+    id: string;
+    name: string;
+    messages?: Array<{
+      id: string;
+      role: string;
+      content: string;
+      createdAt: string;
+    }>;
+  }>;
+};
+
+const mapApiWorkspace = (workspace: ApiWorkspace): Workspace => ({
+  id: workspace.id,
+  name: workspace.name,
+  chats:
+    workspace.projects?.map((project) => ({
+      id: project.id,
+      title: project.name,
+      messages:
+        project.messages?.map((message) => ({
+          id: message.id,
+          role: message.role === "assistant" ? "assistant" : "user",
+          content: message.content,
+          createdAt: message.createdAt
+        })) ?? []
+    })) ?? []
+});
+
 export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
   const [state, setState] = useState<ChatState>(() => createSeedState());
+  const [isApiBacked, setIsApiBacked] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
   const streamTimer = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
@@ -126,8 +161,31 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
   }, []);
 
   useEffect(() => {
+    const loadFromApi = async () => {
+      try {
+        const response = await fetch("/api/workspaces", { cache: "no-store" });
+        if (!response.ok) return;
+        const data = (await response.json()) as ApiWorkspace[];
+        const mapped = Array.isArray(data) ? data.map(mapApiWorkspace) : [];
+        setState((prev) => ({
+          ...prev,
+          workspaces: mapped,
+          activeWorkspaceId: mapped[0]?.id ?? "",
+          activeChatId: mapped[0]?.chats[0]?.id ?? ""
+        }));
+        setIsApiBacked(true);
+      } catch (error) {
+        console.error("Failed to load workspaces:", error);
+      }
+    };
+
+    loadFromApi();
+  }, []);
+
+  useEffect(() => {
+    if (isApiBacked) return;
     saveState(state);
-  }, [state]);
+  }, [state, isApiBacked]);
 
   useEffect(() => {
     return () => {
@@ -152,6 +210,13 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     [activeChat]
   );
 
+  const isMutating = pendingCount > 0;
+
+  const beginMutation = () => {
+    setPendingCount((count) => count + 1);
+    return () => setPendingCount((count) => Math.max(0, count - 1));
+  };
+
   const selectWorkspace = (workspaceId: string) => {
     setState((prev) => {
       const workspace = prev.workspaces.find((item) => item.id === workspaceId);
@@ -168,102 +233,254 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     setState((prev) => ({ ...prev, activeChatId: chatId }));
   };
 
-  const createChat = () => {
-    setState((prev) => {
-      const newChat: Chat = {
-        id: createId(),
-        title: "New Conversation",
-        messages: []
-      };
-      const workspaces = prev.workspaces.map((workspace) =>
-        workspace.id === prev.activeWorkspaceId
-          ? { ...workspace, chats: [newChat, ...workspace.chats] }
-          : workspace
-      );
-      return {
-        ...prev,
-        workspaces,
-        activeChatId: newChat.id
-      };
-    });
-  };
+  const createChat = async () => {
+    const end = beginMutation();
+    const workspaceId = state.activeWorkspaceId;
+    if (!workspaceId) {
+      end();
+      return;
+    }
 
-  const renameChat = (chatId: string, title: string) => {
-    const trimmed = title.trim();
-    if (!trimmed) return;
-    setState((prev) => {
-      const workspaces = prev.workspaces.map((workspace) => {
-        if (workspace.id !== prev.activeWorkspaceId) return workspace;
-        const chats = workspace.chats.map((chat) =>
-          chat.id === chatId ? { ...chat, title: trimmed } : chat
-        );
-        return { ...workspace, chats };
-      });
-      return { ...prev, workspaces };
-    });
-  };
-
-  const deleteChat = (chatId: string) => {
-    setState((prev) => {
-      const workspaces = prev.workspaces.map((workspace) => {
-        if (workspace.id !== prev.activeWorkspaceId) return workspace;
-        const chats = workspace.chats.filter((chat) => chat.id !== chatId);
-        if (chats.length > 0) return { ...workspace, chats };
-        const fallbackChat: Chat = {
+    if (!isApiBacked) {
+      setState((prev) => {
+        const newChat: Chat = {
           id: createId(),
           title: "New Conversation",
           messages: []
         };
-        return { ...workspace, chats: [fallbackChat] };
+        const workspaces = prev.workspaces.map((workspace) =>
+          workspace.id === prev.activeWorkspaceId
+            ? { ...workspace, chats: [newChat, ...workspace.chats] }
+            : workspace
+        );
+        return {
+          ...prev,
+          workspaces,
+          activeChatId: newChat.id
+        };
       });
-      const activeWorkspace = workspaces.find((workspace) => workspace.id === prev.activeWorkspaceId);
-      const nextActiveChatId =
-        prev.activeChatId === chatId ? activeWorkspace?.chats[0]?.id ?? "" : prev.activeChatId;
-      return { ...prev, workspaces, activeChatId: nextActiveChatId };
-    });
+      end();
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/projects", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workspaceId, name: "New Conversation" })
+      });
+      if (!response.ok) return;
+      const project = await response.json();
+      const newChat: Chat = {
+        id: project.id,
+        title: project.name,
+        messages: []
+      };
+      setState((prev) => {
+        const workspaces = prev.workspaces.map((workspace) =>
+          workspace.id === workspaceId
+            ? { ...workspace, chats: [newChat, ...workspace.chats] }
+            : workspace
+        );
+        return { ...prev, workspaces, activeChatId: newChat.id };
+      });
+    } catch (error) {
+      console.error("Failed to create chat:", error);
+    } finally {
+      end();
+    }
   };
 
-  const createWorkspace = (name?: string) => {
-    setState((prev) => {
-      const workspaceId = createId();
-      const chatId = createId();
-      const workspaceName = name?.trim() || `Workspace ${prev.workspaces.length + 1}`;
-      const newWorkspace: Workspace = {
-        id: workspaceId,
-        name: workspaceName,
-        chats: [
-          {
-            id: chatId,
-            title: "New Chat",
+  const renameChat = async (chatId: string, title: string) => {
+    const trimmed = title.trim();
+    if (!trimmed) return;
+    const end = beginMutation();
+    if (!isApiBacked) {
+      setState((prev) => {
+        const workspaces = prev.workspaces.map((workspace) => {
+          if (workspace.id !== prev.activeWorkspaceId) return workspace;
+          const chats = workspace.chats.map((chat) =>
+            chat.id === chatId ? { ...chat, title: trimmed } : chat
+          );
+          return { ...workspace, chats };
+        });
+        return { ...prev, workspaces };
+      });
+      end();
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/projects/${chatId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: trimmed })
+      });
+      if (!response.ok) return;
+      setState((prev) => {
+        const workspaces = prev.workspaces.map((workspace) => {
+          if (workspace.id !== prev.activeWorkspaceId) return workspace;
+          const chats = workspace.chats.map((chat) =>
+            chat.id === chatId ? { ...chat, title: trimmed } : chat
+          );
+          return { ...workspace, chats };
+        });
+        return { ...prev, workspaces };
+      });
+    } catch (error) {
+      console.error("Failed to rename chat:", error);
+    } finally {
+      end();
+    }
+  };
+
+  const deleteChat = async (chatId: string) => {
+    const end = beginMutation();
+    if (!isApiBacked) {
+      setState((prev) => {
+        const workspaces = prev.workspaces.map((workspace) => {
+          if (workspace.id !== prev.activeWorkspaceId) return workspace;
+          const chats = workspace.chats.filter((chat) => chat.id !== chatId);
+          if (chats.length > 0) return { ...workspace, chats };
+          const fallbackChat: Chat = {
+            id: createId(),
+            title: "New Conversation",
             messages: []
-          }
-        ]
-      };
-      return {
-        ...prev,
-        workspaces: [newWorkspace, ...prev.workspaces],
-        activeWorkspaceId: workspaceId,
-        activeChatId: chatId
-      };
-    });
+          };
+          return { ...workspace, chats: [fallbackChat] };
+        });
+        const activeWorkspace = workspaces.find((workspace) => workspace.id === prev.activeWorkspaceId);
+        const nextActiveChatId =
+          prev.activeChatId === chatId ? activeWorkspace?.chats[0]?.id ?? "" : prev.activeChatId;
+        return { ...prev, workspaces, activeChatId: nextActiveChatId };
+      });
+      end();
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/projects/${chatId}`, { method: "DELETE" });
+      if (!response.ok) return;
+      setState((prev) => {
+        const workspaces = prev.workspaces.map((workspace) => {
+          if (workspace.id !== prev.activeWorkspaceId) return workspace;
+          const chats = workspace.chats.filter((chat) => chat.id !== chatId);
+          return { ...workspace, chats };
+        });
+        const activeWorkspace = workspaces.find((workspace) => workspace.id === prev.activeWorkspaceId);
+        const nextActiveChatId =
+          prev.activeChatId === chatId ? activeWorkspace?.chats[0]?.id ?? "" : prev.activeChatId;
+        return { ...prev, workspaces, activeChatId: nextActiveChatId };
+      });
+    } catch (error) {
+      console.error("Failed to delete chat:", error);
+    } finally {
+      end();
+    }
   };
 
-  const deleteWorkspace = (workspaceId: string) => {
-    setState((prev) => {
-      const remaining = prev.workspaces.filter((workspace) => workspace.id !== workspaceId);
-      if (remaining.length === 0) {
-        const fallback = createSeedState();
-        return { ...fallback, sidebarCollapsed: prev.sidebarCollapsed };
-      }
-      const nextActiveWorkspace =
-        prev.activeWorkspaceId === workspaceId ? remaining[0] : remaining.find((w) => w.id === prev.activeWorkspaceId);
-      return {
-        ...prev,
-        workspaces: remaining,
-        activeWorkspaceId: nextActiveWorkspace?.id ?? remaining[0].id,
-        activeChatId: nextActiveWorkspace?.chats[0]?.id ?? remaining[0].chats[0]?.id ?? ""
+  const createWorkspace = async (name?: string) => {
+    const workspaceName = name?.trim() || `Workspace ${state.workspaces.length + 1}`;
+    if (!workspaceName) return;
+    const end = beginMutation();
+
+    if (!isApiBacked) {
+      setState((prev) => {
+        const workspaceId = createId();
+        const chatId = createId();
+        const newWorkspace: Workspace = {
+          id: workspaceId,
+          name: workspaceName,
+          chats: [
+            {
+              id: chatId,
+              title: "New Chat",
+              messages: []
+            }
+          ]
+        };
+        return {
+          ...prev,
+          workspaces: [newWorkspace, ...prev.workspaces],
+          activeWorkspaceId: workspaceId,
+          activeChatId: chatId
+        };
+      });
+      end();
+      return;
+    }
+
+    try {
+      const response = await fetch("/api/workspaces", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: workspaceName })
+      });
+      if (!response.ok) return;
+      const workspace = await response.json();
+      const mapped: Workspace = {
+        id: workspace.id,
+        name: workspace.name,
+        chats: []
       };
-    });
+      setState((prev) => ({
+        ...prev,
+        workspaces: [mapped, ...prev.workspaces],
+        activeWorkspaceId: mapped.id,
+        activeChatId: ""
+      }));
+    } catch (error) {
+      console.error("Failed to create workspace:", error);
+    } finally {
+      end();
+    }
+  };
+
+  const deleteWorkspace = async (workspaceId: string) => {
+    const end = beginMutation();
+    if (!isApiBacked) {
+      setState((prev) => {
+        const remaining = prev.workspaces.filter((workspace) => workspace.id !== workspaceId);
+        if (remaining.length === 0) {
+          const fallback = createSeedState();
+          return { ...fallback, sidebarCollapsed: prev.sidebarCollapsed };
+        }
+        const nextActiveWorkspace =
+          prev.activeWorkspaceId === workspaceId
+            ? remaining[0]
+            : remaining.find((w) => w.id === prev.activeWorkspaceId);
+        return {
+          ...prev,
+          workspaces: remaining,
+          activeWorkspaceId: nextActiveWorkspace?.id ?? remaining[0].id,
+          activeChatId: nextActiveWorkspace?.chats[0]?.id ?? remaining[0].chats[0]?.id ?? ""
+        };
+      });
+      end();
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/workspaces/${workspaceId}`, { method: "DELETE" });
+      if (!response.ok) return;
+      setState((prev) => {
+        const remaining = prev.workspaces.filter((workspace) => workspace.id !== workspaceId);
+        const nextActiveWorkspace =
+          prev.activeWorkspaceId === workspaceId
+            ? remaining[0]
+            : remaining.find((w) => w.id === prev.activeWorkspaceId);
+        return {
+          ...prev,
+          workspaces: remaining,
+          activeWorkspaceId: nextActiveWorkspace?.id ?? "",
+          activeChatId: nextActiveWorkspace?.chats[0]?.id ?? ""
+        };
+      });
+    } catch (error) {
+      console.error("Failed to delete workspace:", error);
+    } finally {
+      end();
+    }
   };
 
   const toggleSidebar = () => {
@@ -342,6 +559,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     activeWorkspace,
     activeChat,
     isStreaming,
+    isMutating,
     selectWorkspace,
     selectChat,
     createChat,
