@@ -48,8 +48,7 @@ export const ChatItem = ({
     }
   }, [isRenaming]);
 
-  const handleRename = (e: React.FormEvent) => {
-    e.preventDefault();
+  const commitRename = () => {
     const trimmedTitle = newTitle.trim();
     if (trimmedTitle && trimmedTitle !== chat.title) {
       try {
@@ -67,13 +66,19 @@ export const ChatItem = ({
     }
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    commitRename();
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    e.stopPropagation();
     if (e.key === 'Escape') {
       setNewTitle(chat.title);
       setIsRenaming(false);
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      handleRename(e);
+      commitRename();
     }
   };
 
@@ -99,6 +104,7 @@ export const ChatItem = ({
         role="button"
         tabIndex={0}
         onKeyDown={(e) => {
+          if (isRenaming) return;
           if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
             onSelect(chat.id);
@@ -111,8 +117,8 @@ export const ChatItem = ({
         }`}
       >
         {isRenaming ? (
-          <form 
-            onSubmit={handleRename}
+          <form
+            onSubmit={handleSubmit}
             className="flex-1"
             onClick={(e) => e.stopPropagation()}
           >
@@ -121,13 +127,11 @@ export const ChatItem = ({
               type="text"
               value={newTitle}
               onChange={(e) => setNewTitle(e.target.value)}
-              onBlur={() => {
-                setIsRenaming(false);
-                setNewTitle(chat.title);
-              }}
+              onBlur={commitRename}
               onKeyDown={handleKeyDown}
               className="w-full bg-transparent outline-none"
               onClick={(e) => e.stopPropagation()}
+              onKeyUp={(e) => e.stopPropagation()}
             />
           </form>
         ) : (

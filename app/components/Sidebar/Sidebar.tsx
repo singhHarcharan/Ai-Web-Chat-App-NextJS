@@ -10,6 +10,8 @@ export const Sidebar = () => {
     selectWorkspace,
     selectChat,
     createChat,
+    renameChat,
+    deleteChat,
     createWorkspace,
     deleteWorkspace,
     toggleSidebar
@@ -68,6 +70,8 @@ export const Sidebar = () => {
           activeChatId={state.activeChatId}
           onSelect={selectChat}
           onCreate={createChat}
+          onRename={renameChat}
+          onDelete={deleteChat}
           collapsed={state.sidebarCollapsed}
         />
       </div>

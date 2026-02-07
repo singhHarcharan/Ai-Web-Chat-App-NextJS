@@ -26,6 +26,8 @@ export type ChatContextValue = {
   selectWorkspace: (workspaceId: string) => void;
   selectChat: (chatId: string) => void;
   createChat: () => void;
+  renameChat: (chatId: string, title: string) => void;
+  deleteChat: (chatId: string) => void;
   createWorkspace: (name?: string) => void;
   deleteWorkspace: (workspaceId: string) => void;
   toggleSidebar: () => void;
@@ -186,6 +188,41 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     });
   };
 
+  const renameChat = (chatId: string, title: string) => {
+    const trimmed = title.trim();
+    if (!trimmed) return;
+    setState((prev) => {
+      const workspaces = prev.workspaces.map((workspace) => {
+        if (workspace.id !== prev.activeWorkspaceId) return workspace;
+        const chats = workspace.chats.map((chat) =>
+          chat.id === chatId ? { ...chat, title: trimmed } : chat
+        );
+        return { ...workspace, chats };
+      });
+      return { ...prev, workspaces };
+    });
+  };
+
+  const deleteChat = (chatId: string) => {
+    setState((prev) => {
+      const workspaces = prev.workspaces.map((workspace) => {
+        if (workspace.id !== prev.activeWorkspaceId) return workspace;
+        const chats = workspace.chats.filter((chat) => chat.id !== chatId);
+        if (chats.length > 0) return { ...workspace, chats };
+        const fallbackChat: Chat = {
+          id: createId(),
+          title: "New Conversation",
+          messages: []
+        };
+        return { ...workspace, chats: [fallbackChat] };
+      });
+      const activeWorkspace = workspaces.find((workspace) => workspace.id === prev.activeWorkspaceId);
+      const nextActiveChatId =
+        prev.activeChatId === chatId ? activeWorkspace?.chats[0]?.id ?? "" : prev.activeChatId;
+      return { ...prev, workspaces, activeChatId: nextActiveChatId };
+    });
+  };
+
   const createWorkspace = (name?: string) => {
     setState((prev) => {
       const workspaceId = createId();
@@ -308,6 +345,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     selectWorkspace,
     selectChat,
     createChat,
+    renameChat,
+    deleteChat,
     createWorkspace,
     deleteWorkspace,
     toggleSidebar,
