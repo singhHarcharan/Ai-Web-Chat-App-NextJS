@@ -1,1 +1,0 @@
-self.__NEXT_FONT_MANIFEST="{\"pages\":{},\"app\":{\"/Users/hustler_harcharan/Documents/Projects/ai-chat-app-nextjs/app/layout\":[\"static/media/636a5ac981f94f8b-s.p.woff2\"]},\"appUsingSizeAdjust\":true,\"pagesUsingSizeAdjust\":false}"
