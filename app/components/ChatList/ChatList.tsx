@@ -12,6 +12,7 @@ type ChatListProps = {
   onDelete: (chatId: string) => void;
   collapsed?: boolean;
   isMutating?: boolean;
+  isLoading?: boolean;
 };
 
 export const ChatList = ({
@@ -22,7 +23,8 @@ export const ChatList = ({
   onRename,
   onDelete,
   collapsed = false,
-  isMutating = false
+  isMutating = false,
+  isLoading = false
 }: ChatListProps) => {
   return (
     <div className="flex h-full flex-col">
@@ -41,7 +43,14 @@ export const ChatList = ({
       )}
 
       <div className="flex-1 overflow-y-auto px-4 py-2">
-        {chats.length > 0 ? (
+        {isLoading ? (
+          <div className="flex h-full flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-slate-200 p-6 text-center dark:border-slate-800">
+            <div className="flex items-center gap-2 text-xs text-slate-500">
+              <span className="h-2 w-2 animate-pulse rounded-full bg-slate-400" />
+              Loading chats...
+            </div>
+          </div>
+        ) : chats.length > 0 ? (
           <div className="space-y-2">
             {chats.map((chat) => (
               <ChatItem

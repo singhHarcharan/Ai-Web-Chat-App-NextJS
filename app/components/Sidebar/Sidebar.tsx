@@ -15,7 +15,8 @@ export const Sidebar = () => {
     createWorkspace,
     deleteWorkspace,
     toggleSidebar,
-    isMutating
+    isMutating,
+    isLoadingWorkspaces
   } = useChat();
   const activeWorkspace = state.workspaces.find(
     (workspace) => workspace.id === state.activeWorkspaceId
@@ -59,6 +60,7 @@ export const Sidebar = () => {
               if (confirmed) deleteWorkspace(workspaceId);
             }}
             isMutating={isMutating}
+            isLoading={isLoadingWorkspaces}
           />
         </div>
       )}
@@ -73,6 +75,7 @@ export const Sidebar = () => {
           onDelete={deleteChat}
           collapsed={state.sidebarCollapsed}
           isMutating={isMutating}
+          isLoading={isLoadingWorkspaces}
         />
       </div>
     </aside>

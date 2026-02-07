@@ -11,6 +11,7 @@ interface WorkspaceSelectorProps {
   onCreate: (name: string) => Promise<void> | void;
   onDelete: (workspaceId: string) => void;
   isMutating?: boolean;
+  isLoading?: boolean;
 }
 
 export function WorkspaceSelector({
@@ -20,6 +21,7 @@ export function WorkspaceSelector({
   onCreate,
   onDelete,
   isMutating = false,
+  isLoading = false,
 }: WorkspaceSelectorProps) {
   const [isCreating, setIsCreating] = useState(false);
   const [workspaceName, setWorkspaceName] = useState("");
@@ -119,7 +121,12 @@ export function WorkspaceSelector({
       )}
 
       <div className="space-y-1.5">
-        {workspaces.map((workspace) => {
+        {isLoading ? (
+          <div className="rounded-lg border border-dashed border-slate-200 p-4 text-xs text-slate-500 dark:border-slate-800">
+            Loading workspaces...
+          </div>
+        ) : (
+        workspaces.map((workspace) => {
           const isActive = activeWorkspaceId === workspace.id;
           return (
             <div
@@ -163,7 +170,7 @@ export function WorkspaceSelector({
               </button>
             </div>
           );
-        })}
+        }))}
       </div>
     </div>
   );

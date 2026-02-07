@@ -24,6 +24,7 @@ export type ChatContextValue = {
   activeChat: Chat | undefined;
   isStreaming: boolean;
   isMutating: boolean;
+  isLoadingWorkspaces: boolean;
   selectWorkspace: (workspaceId: string) => void;
   selectChat: (chatId: string) => void;
   createChat: () => void;
@@ -46,59 +47,18 @@ const createId = () => {
 
 const nowIso = () => new Date().toISOString();
 
-// Seed data lives in context to keep components purely presentational.
-const createSeedState = (): ChatState => {
-  const workspaceId = createId();
-  const chatId = createId();
-
-  return {
-    user: {
-      id: createId(),
-      name: "Alex Morgan",
-      email: "alex@workspace.dev"
-    },
-    workspaces: [
-      {
-        id: workspaceId,
-        name: "Product Strategy",
-        chats: [
-          {
-            id: chatId,
-            title: "Q1 Planning Assistant",
-            messages: [
-              {
-                id: createId(),
-                role: "assistant",
-                content:
-                  "Hi Alex! I can help you organize ideas and prepare briefs. Ask me anything to get started.",
-                createdAt: nowIso()
-              }
-            ]
-          },
-          {
-            id: createId(),
-            title: "Competitive Research",
-            messages: []
-          }
-        ]
-      },
-      {
-        id: createId(),
-        name: "Client Proposals",
-        chats: [
-          {
-            id: createId(),
-            title: "Launch Deck Outline",
-            messages: []
-          }
-        ]
-      }
-    ],
-    activeWorkspaceId: workspaceId,
-    activeChatId: chatId,
-    sidebarCollapsed: false
-  };
-};
+// Empty initial state when backend is the source of truth.
+const createSeedState = (): ChatState => ({
+  user: {
+    id: "",
+    name: "",
+    email: ""
+  },
+  workspaces: [],
+  activeWorkspaceId: "",
+  activeChatId: "",
+  sidebarCollapsed: false
+});
 
 const loadState = (): ChatState => {
   if (typeof window === "undefined") {
@@ -154,6 +114,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
   const [state, setState] = useState<ChatState>(() => createSeedState());
   const [isApiBacked, setIsApiBacked] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
+  const [isLoadingWorkspaces, setIsLoadingWorkspaces] = useState(true);
   const streamTimer = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
@@ -162,6 +123,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
 
   useEffect(() => {
     const loadFromApi = async () => {
+      setIsLoadingWorkspaces(true);
       try {
         const response = await fetch("/api/workspaces", { cache: "no-store" });
         if (!response.ok) return;
@@ -176,6 +138,8 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
         setIsApiBacked(true);
       } catch (error) {
         console.error("Failed to load workspaces:", error);
+      } finally {
+        setIsLoadingWorkspaces(false);
       }
     };
 
@@ -442,8 +406,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
       setState((prev) => {
         const remaining = prev.workspaces.filter((workspace) => workspace.id !== workspaceId);
         if (remaining.length === 0) {
-          const fallback = createSeedState();
-          return { ...fallback, sidebarCollapsed: prev.sidebarCollapsed };
+          return { ...prev, workspaces: [], activeWorkspaceId: "", activeChatId: "" };
         }
         const nextActiveWorkspace =
           prev.activeWorkspaceId === workspaceId
@@ -560,6 +523,7 @@ export const ChatProvider = ({ children }: { children: React.ReactNode }) => {
     activeChat,
     isStreaming,
     isMutating,
+    isLoadingWorkspaces,
     selectWorkspace,
     selectChat,
     createChat,
